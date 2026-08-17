@@ -27,6 +27,5 @@ Thumbs.db
 # HuggingFace model cache
 .cache/
 
-# Generated Knowledge Graph and Embeddings (too large for GitHub)
-data/*.json
-data/*.pt
+# Generated Data, Knowledge Graph, and Embeddings (too large for GitHub)
+data/
