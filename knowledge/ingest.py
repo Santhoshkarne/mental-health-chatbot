@@ -86,6 +86,38 @@ def is_valid_word(word):
     return True
 
 
+def is_junk_page(text):
+    """
+    Detect pure index pages that add noise to the knowledge graph.
+    
+    Only filters pages that are clearly NOT content:
+    - Index pages with high ratios of page numbers (e.g., "Term, 123, 456–789")
+    - Pages with an explicit "INDEX" header
+    
+    We do NOT filter bibliography/reference pages because academic textbooks
+    often mix real content with citations on the same page.
+    """
+    if not text or len(text.strip()) < 50:
+        return True
+
+    words = text.split()
+
+    # Index page detection: high ratio of standalone page numbers
+    # Index entries look like: "Term, 123, 456–789, 234"
+    page_refs = re.findall(r'\b\d{1,4}\b', text)
+    if len(words) > 20:
+        number_ratio = len(page_refs) / len(words)
+        if number_ratio > 0.30:
+            return True
+
+    # Explicit "INDEX" in first 100 chars with many page numbers
+    first_chunk = text.strip()[:100].upper()
+    if "INDEX" in first_chunk and len(page_refs) > 5:
+        return True
+
+    return False
+
+
 # ──────────────────────────────────────────────────────────────
 # Stop Words
 # ──────────────────────────────────────────────────────────────
@@ -170,7 +202,7 @@ def extract_text_from_pdf(
                 continue
 
             text = page.extract_text()
-            if text and len(text.strip()) > 50:
+            if text and len(text.strip()) > 50 and not is_junk_page(text):
                 pages.append(text)
 
     return pages
@@ -388,7 +420,7 @@ def print_top_connections(graph: dict, word_freq: dict, top_n: int = 15):
     print(f"  {'─'*20} {'─'*8} {'─'*45}")
 
     for word, neighbors in sorted_words[:top_n]:
-        top_neighbors = sorted(neighbors.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_neighbors = sorted(neighbors.items(), key=lambda x: x[1], reverse=True)[:10]
         neighbor_str = ", ".join(f"{n}({w})" for n, w in top_neighbors)
         print(f"  {word:<20} {word_freq.get(word, 0):<8} {neighbor_str}")
 

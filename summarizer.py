@@ -1,58 +1,127 @@
-import ollama
+"""
+BigBird-Pegasus Abstractive Summarizer (PubMed)
+================================================
 
-class AbstractiveSummarizer:
-    def __init__(self, model_name="gemma3:4b"):
+Uses google/bigbird-pegasus-large-pubmed for abstractive summarization
+of retrieved medical textbook paragraphs.
+
+Why BigBird-Pegasus-PubMed?
+  - Supports up to 4096 tokens input (vs 512 for regular Pegasus/BERT)
+  - Fine-tuned on PubMed biomedical literature → perfect for mental health content
+  - Generates fluent, medically accurate abstractive summaries
+  - Runs 100% locally on CPU — no API keys, no internet needed after download
+
+Architecture:
+  - Encoder: BigBird sparse attention (handles long documents efficiently)
+  - Decoder: Pegasus-style autoregressive generation
+  - Tokenizer: SentencePiece (subword tokenization)
+"""
+
+import warnings
+import torch
+from transformers import BigBirdPegasusForConditionalGeneration, AutoTokenizer
+
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+# Model identifier on Hugging Face
+MODEL_NAME = "google/bigbird-pegasus-large-pubmed"
+
+
+class BigBirdSummarizer:
+    """
+    Abstractive summarizer using BigBird-Pegasus fine-tuned on PubMed.
+
+    This model can accept up to 4096 tokens as input, which means we can
+    feed all 5 retrieved paragraphs (~1500 words) without any truncation.
+
+    The model generates a concise, medically-grounded summary that synthesizes
+    information from all the retrieved paragraphs into a coherent response.
+    """
+
+    def __init__(self, model_name: str = MODEL_NAME):
         self.model_name = model_name
-        print(f"\nInitializing Summarizer using Ollama (Model: {self.model_name})...")
-        
-        # We assume the model is already pulled via `ollama pull gemma3:4b`
-        try:
-            # Quick check if model is available
-            ollama.show(self.model_name)
-            print("Summarizer loaded successfully!")
-            self.loaded = True
-        except Exception as e:
-            print(f"Warning: Model {self.model_name} not found in Ollama. Please run `ollama pull {self.model_name}` in your terminal.")
-            self.loaded = False
+        self.tokenizer = None
+        self.model = None
+        self.device = "cpu"
+        self._load_model()
 
-    def generate_response(self, combined_context: dict) -> str:
-        if not self.loaded:
-            return "Summarizer model is not loaded. Please make sure Ollama is running and the model is pulled."
+    def _load_model(self):
+        """Download (first time only) and load the model + tokenizer."""
+        print(f"\n{'='*60}")
+        print(f"  Loading BigBird-Pegasus-PubMed Summarizer")
+        print(f"  Model: {self.model_name}")
+        print(f"{'='*60}")
+        print("  (First run downloads ~3.5GB — cached after that)")
 
-        system_prompt = (
-            "You are a compassionate, empathetic mental health assistant. "
-            "You are given a user query, a dialog analysis (emotions, severity, intent), "
-            "and relevant background knowledge from psychology books. "
-            "Write a supportive and helpful response to the user. "
-            "Ground your advice in the provided knowledge contexts but keep your tone conversational and empathetic. "
-            "Do not just summarize the texts; offer practical, compassionate advice."
-        )
-        
-        user_message = f"User Query: {combined_context.get('query', '')}\n\n"
-        
-        user_message += "--- Dialog Analysis ---\n"
-        da = combined_context.get("dialog_analysis", {})
-        user_message += f"Emotion: {da.get('emotion', 'None')}\n"
-        user_message += f"Severity: {da.get('severity', 'None')}\n"
-        intent = da.get("intent", {})
-        if intent.get("action"):
-            user_message += f"Intent: Action='{intent['action']}', Object='{intent['object']}'\n"
-            
-        user_message += "\n--- Relevant Knowledge ---\n"
-        for i, ctx in enumerate(combined_context.get("knowledge_contexts", [])):
-            user_message += f"[{i+1}] Source: {ctx['source']}\nText: {ctx['text'][:500]}...\n\n"
-            
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
-        ]
-        
-        print("Generating response...")
         try:
-            response = ollama.chat(
-                model=self.model_name,
-                messages=messages
+            print("  [1/2] Loading tokenizer...")
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+
+            print("  [2/2] Loading model weights...")
+            self.model = BigBirdPegasusForConditionalGeneration.from_pretrained(
+                self.model_name,
+                attention_type="block_sparse",  # Sparse attention is required for fast 4000+ token processing!
             )
-            return response['message']['content'].strip()
+            self.model.eval()  # Set to evaluation mode (no dropout)
+            print("  ✅ Summarizer loaded successfully!")
+            print(f"{'='*60}\n")
+
         except Exception as e:
-            return f"Error generating response from Ollama: {e}"
+            print(f"  ❌ Failed to load summarizer: {e}")
+            print(f"{'='*60}\n")
+            self.tokenizer = None
+            self.model = None
+
+    def summarize(self, context_text: str, query: str = "") -> str:
+        """
+        Generate an abstractive summary from the retrieved paragraphs.
+
+        Args:
+            context_text: Combined text from retrieved paragraphs.
+            query:        The original user query (prepended for query-focused summarization).
+
+        Returns:
+            A concise, medically-grounded summary string.
+        """
+        if not self.model or not self.tokenizer:
+            return "❌ Summarizer model is not loaded. Please check the error above."
+
+        # Prepend the query for query-focused summarization
+        # This guides the model to focus on what the user actually asked
+        if query:
+            input_text = f"Question: {query}\n\nContext: {context_text}"
+        else:
+            input_text = context_text
+
+        print("\n  [Summarizer] Generating abstractive response...")
+
+        try:
+            # Tokenize with BigBird's 4096 token limit to fit all retrieved paragraphs
+            inputs = self.tokenizer(
+                input_text,
+                return_tensors="pt",
+                max_length=4096,      # Restored to 4096 to prevent truncation
+                truncation=True,
+                padding=True,
+            )
+
+            # Generate summary (Optimized for CPU speed)
+            with torch.no_grad():
+                summary_ids = self.model.generate(
+                    inputs["input_ids"],
+                    attention_mask=inputs["attention_mask"],
+                    max_length=150,       # Max output tokens (reduced for speed)
+                    min_length=30,        # Minimum output length
+                    num_beams=1,          # Changed to 1 (Greedy search) - MUCH faster than beam search=4
+                    length_penalty=1.0,   
+                    no_repeat_ngram_size=3,
+                    early_stopping=True,
+                )
+
+            # Decode the generated tokens back to text
+            summary = self.tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+            return summary
+
+        except Exception as e:
+            return f"❌ Error during summarization: {e}"
