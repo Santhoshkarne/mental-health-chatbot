@@ -21,8 +21,8 @@ import numpy as np
 # ── Configuration ────────────────────────────────────────────
 csv.field_size_limit(sys.maxsize)
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(SCRIPT_DIR, "..", "Bert", "output")
+from config.settings import REDDIT_OUTPUT_DIR
+OUTPUT_DIR = REDDIT_OUTPUT_DIR
 
 TOP_K = 10  # Number of similar results to return
 

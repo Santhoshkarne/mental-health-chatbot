@@ -30,9 +30,9 @@ from collections import defaultdict
 # ── Configuration ────────────────────────────────────────────
 csv.field_size_limit(sys.maxsize)
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, "redditDatasets")
-OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
+from config.settings import REDDIT_RAW_DIR, REDDIT_KEYBERT_OUTPUT_DIR
+DATA_DIR = REDDIT_RAW_DIR
+OUTPUT_DIR = REDDIT_KEYBERT_OUTPUT_DIR
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 MAX_QA_PER_DISEASE = 5000      # Max Q&A pairs to keep per disease

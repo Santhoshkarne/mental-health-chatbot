@@ -13,7 +13,9 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ── Data Paths ──
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-REDDIT_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "Bert", "output")
+REDDIT_RAW_DIR = os.path.join(DATA_DIR, "reddit", "raw")
+REDDIT_OUTPUT_DIR = os.path.join(DATA_DIR, "reddit", "processed", "bert")
+REDDIT_KEYBERT_OUTPUT_DIR = os.path.join(DATA_DIR, "reddit", "processed", "keybert")
 
 # ── Embedding Model ──
 SBERT_MODEL_NAME = "all-MiniLM-L6-v2"
