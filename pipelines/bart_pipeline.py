@@ -14,9 +14,9 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-from knowledge.retrieve import HybridRetriever, clean_output_text
-from Bert.retrieve import load_training_data, find_similar
-from bart_summarizer import BartChunkedSummarizer
+from retrievers.book_retriever import HybridRetriever, clean_output_text
+from retrievers.reddit_retriever import load_training_data, find_similar
+from summarizers.bart_summarizer import BartChunkedSummarizer
 
 
 def main():

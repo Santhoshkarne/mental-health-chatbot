@@ -1,27 +1,27 @@
 """
-End-to-End RAG Pipeline with Pegasus-X Summarizer
-=================================================
+End-to-End RAG Pipeline with Gemma Summarizer
+=============================================
 
 Full pipeline:
   1. User types a question
   2. HybridRetriever searches 5 medical textbooks
   3. Bert/retrieve searches the Reddit Q&A dataset
   4. Both contexts are combined
-  5. Pegasus-X synthesizes a final, unified answer
+  5. Gemma synthesizes a final, unified answer
 """
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-from knowledge.retrieve import HybridRetriever, clean_output_text
-from Bert.retrieve import load_training_data, find_similar
-from pegasus_x_summarizer import PegasusXSummarizer
+from retrievers.book_retriever import HybridRetriever, clean_output_text
+from retrievers.reddit_retriever import load_training_data, find_similar
+from summarizers.gemma_summarizer import GemmaSummarizer
 
 
 def main():
     print("\n" + "=" * 70)
-    print("  🧠 Mental Health Chatbot — RAG (Books + Reddit) + Pegasus-X")
+    print("  🧠 Mental Health Chatbot — RAG (Books + Reddit) + Gemma")
     print("=" * 70)
 
     # ── Step 1: Load Knowledge Retriever (Textbooks) ──
@@ -45,9 +45,9 @@ def main():
         print(f"❌ Error loading Reddit data: {e}")
         reddit_data = []
 
-    # ── Step 3: Load Summarizer (Pegasus-X) ──
+    # ── Step 3: Load Summarizer (Gemma) ──
     try:
-        summarizer = PegasusXSummarizer()
+        summarizer = GemmaSummarizer()
     except Exception as e:
         print(f"❌ Could not load summarizer: {e}")
         summarizer = None
@@ -122,13 +122,17 @@ def main():
 
         # ── E. Generate abstractive summary ──
         if summarizer:
-            summary = summarizer.summarize(full_context_string, query=user_input)
-
             print("\n" + "=" * 70)
             print("  🤖 Answer:")
             print("=" * 70)
-            print(f"\n  {summary}")
-            print("\n" + "=" * 70)
+            print("\n  ", end="")
+            
+            # Print chunks as they stream in
+            for chunk in summarizer.summarize(full_context_string, query=user_input):
+                import sys
+                print(chunk, end="", flush=True)
+                
+            print("\n\n" + "=" * 70)
         else:
             print("\n  ⚠️ Summarizer not loaded. Showing raw data only:")
             print(full_context_string)

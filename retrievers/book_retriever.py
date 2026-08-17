@@ -15,7 +15,7 @@ import torch
 from sentence_transformers import SentenceTransformer, util
 from typing import List, Tuple
 
-from knowledge.reranker import mmr_rerank, RankedResult
+from retrievers.reranker import mmr_rerank, RankedResult
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 MODEL_NAME = "all-MiniLM-L6-v2"

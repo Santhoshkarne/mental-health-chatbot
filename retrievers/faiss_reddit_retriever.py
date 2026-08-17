@@ -23,7 +23,7 @@ import faiss
 csv.field_size_limit(sys.maxsize)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, "..", "Bert", "output")
 
 TOP_K = 10  # Number of similar results to return
 
