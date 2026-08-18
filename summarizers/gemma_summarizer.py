@@ -64,7 +64,8 @@ class GemmaSummarizer:
 
             req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
             
-            with urllib.request.urlopen(req) as response:
+            # Timeout set to 60 seconds so it doesn't freeze forever
+            with urllib.request.urlopen(req, timeout=60) as response:
                 for line in response:
                     if line:
                         chunk = json.loads(line.decode('utf-8'))
@@ -73,5 +74,7 @@ class GemmaSummarizer:
 
         except urllib.error.URLError as e:
             yield f"❌ Error connecting to Ollama: {e.reason}"
+        except TimeoutError:
+            yield "\n\n⚠️ Ollama took too long to respond (timeout). It might be downloading the model or struggling to process the context."
         except Exception as e:
             yield f"❌ Error during generation: {e}"

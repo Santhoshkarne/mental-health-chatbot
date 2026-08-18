@@ -1,27 +1,17 @@
-"""
-End-to-End RAG Pipeline with BART-Large-CNN (Chunked) Summarizer
-================================================================
-
-Full pipeline:
-  1. User types a question
-  2. HybridRetriever searches 5 medical textbooks
-  3. Bert/retrieve searches the Reddit Q&A dataset
-  4. Both contexts are combined
-  5. BART-Large-CNN summarizes using overlapping chunks for long inputs
-"""
-
+import sys
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 from retrievers.book_retriever import HybridRetriever, clean_output_text
 from retrievers.reddit_retriever import load_training_data, find_similar
-from summarizers.bart_summarizer import BartChunkedSummarizer
-
+from summarizers.gemma_summarizer import GemmaSummarizer
+from pipeline import analyze_query
 
 def main():
     print("\n" + "=" * 70)
-    print("  🧠 Mental Health Chatbot — RAG (Books + Reddit) + BART-Large-CNN")
+    print("  🌟 Mental Health Chatbot — Final Integrated Pipeline")
+    print("  (Emotion/Cause/Severity + Textbooks + Reddit + Gemma LLM)")
     print("=" * 70)
 
     # ── Step 1: Load Knowledge Retriever (Textbooks) ──
@@ -45,17 +35,17 @@ def main():
         print(f"❌ Error loading Reddit data: {e}")
         reddit_data = []
 
-    # ── Step 3: Load Summarizer (BART with Chunking) ──
+    # ── Step 3: Load Summarizer (Gemma via Ollama) ──
     try:
-        summarizer = BartChunkedSummarizer()
+        summarizer = GemmaSummarizer()
     except Exception as e:
-        print(f"❌ Could not load summarizer: {e}")
+        print(f"❌ Could not load Gemma summarizer: {e}")
         summarizer = None
 
     # ── Step 4: Interactive Chat Loop ──
     print("=" * 70)
     print("  Chatbot is ready! Type your question below.")
-    print("  Type 'quit' to exit.")
+    print("  Press Enter on an empty line, or type 'quit' to exit.")
     print("=" * 70)
 
     while True:
@@ -66,6 +56,7 @@ def main():
             print("\n\nGoodbye! 👋")
             break
 
+        # Exit on empty input or 'quit'
         if not user_input:
             print("\nGoodbye! 👋")
             break
@@ -74,64 +65,74 @@ def main():
             print("\nGoodbye! 👋")
             break
 
+        # ── A. Analyze the User's Query ──
+        # This calls your pipeline.py function to extract emotion, intent, etc.
+        analysis = analyze_query(user_input)
+        
+        # ── B. Retrieve from Textbooks ──
         combined_contexts = []
-
-        # ── A. Retrieve from Textbooks ──
         print("\n  🔍 Searching Textbooks...")
-        book_results = book_retriever.retrieve_top_k(user_input, k=5, similarity_pool=10)
+        book_results = book_retriever.retrieve_top_k(user_input, k=3, similarity_pool=10)
         
         if book_results:
             combined_contexts.append("=== MEDICAL TEXTBOOK EXCERPTS ===")
-            print(f"  📖 Found {len(book_results)} textbook paragraphs.")
-            for i, result in enumerate(book_results, 1):
+            for result in book_results:
                 cleaned = clean_output_text(result["text"])
                 combined_contexts.append(f"[Textbook: {result['source']}]\n{cleaned}\n")
-        else:
-            print("  ⚠️ No relevant textbook paragraphs found.")
 
-        # ── B. Retrieve from Reddit Q&A ──
+        # ── C. Retrieve from Reddit Q&A ──
         if reddit_data:
             print("  🔍 Searching Reddit Discussions...")
             query_emb = book_retriever.model.encode(user_input)
-            reddit_results = find_similar(query_emb, reddit_data, top_k=5)
+            reddit_results = find_similar(query_emb, reddit_data, top_k=3)
             
             if reddit_results:
                 combined_contexts.append("=== REDDIT DISCUSSIONS ===")
-                print(f"  💬 Found {len(reddit_results)} Reddit discussions.")
-                for i, result in enumerate(reddit_results, 1):
+                for result in reddit_results:
                     q = result["question"]
                     ans = result["answers"][0]["answer"] if result["answers"] else "No answer available."
+                    if len(ans) > 500:
+                        ans = ans[:500] + "..."
                     combined_contexts.append(f"[Reddit Discussion - {result['disease']}]\nQuestion: {q}\nTop Answer: {ans}\n")
-            else:
-                print("  ⚠️ No relevant Reddit discussions found.")
 
-        # ── C. Combine everything ──
+        # ── D. Prepare Prompt for Gemma ──
         if not combined_contexts:
-            print("\n  🤖 Answer: I couldn't find any relevant information in my databases to answer that.")
+            print("\n  🤖 Answer: I couldn't find any relevant information to answer that.")
             continue
 
         full_context_string = "\n".join(combined_contexts)
 
-        # ── D. Show Combined Context in Terminal ──
-        print("\n" + "=" * 70)
-        print("  RAW EXTRACTED CONTEXT (Sent to Summarizer):")
-        print("=" * 70)
-        print(f"\n{full_context_string}\n")
-        print("=" * 70)
+        # Build a powerful query string that forces the LLM to consider the user's emotional state
+        enhanced_query = f"{user_input}\n\n[User's Current Mental State Profile]"
+        if analysis["emotion"]:
+            enhanced_query += f"\n- Emotion Detected: {analysis['emotion']}"
+        if analysis["severity"]:
+            enhanced_query += f"\n- Severity Level: {analysis['severity']}"
+        if analysis["cause"]:
+            enhanced_query += f"\n- Potential Cause: {', '.join(analysis['cause'])}"
+        if analysis["effect"]:
+            enhanced_query += f"\n- Resulting Effect: {', '.join(analysis['effect'])}"
+            
+        enhanced_query += "\n\nInstruction for AI: The user is seeking help. Use the provided context to answer their question. Write your response with deep empathy, acknowledging their current emotion and severity level."
 
-        # ── E. Generate abstractive summary ──
+        # ── E. Generate Answer with Gemma ──
         if summarizer:
-            summary = summarizer.summarize(full_context_string, query=user_input)
-
             print("\n" + "=" * 70)
             print("  🤖 Answer:")
             print("=" * 70)
-            print(f"\n  {summary}")
+            print("  ", end="", flush=True)
+            
+            # Stream the response directly to the terminal!
+            try:
+                for chunk in summarizer.summarize(full_context_string, query=enhanced_query):
+                    print(chunk, end="", flush=True)
+                print() # Newline after response finishes
+            except Exception as e:
+                print(f"\n❌ Streaming error: {e}")
+                
             print("\n" + "=" * 70)
         else:
-            print("\n  ⚠️ Summarizer not loaded. Showing raw data only:")
-            print(full_context_string)
-
+            print("\n  ⚠️ Summarizer not loaded.")
 
 if __name__ == "__main__":
     main()

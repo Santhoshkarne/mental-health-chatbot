@@ -1,8 +1,18 @@
 import warnings
 import os
 import sys
-from intent import extract_intent
-from severity import detect_severity
+
+# Add detectors paths so internal imports work
+base_dir = os.path.dirname(os.path.abspath(__file__))
+detectors_path = os.path.join(base_dir, "detectors")
+cause_path = os.path.join(detectors_path, "cause")
+if detectors_path not in sys.path:
+    sys.path.append(detectors_path)
+if cause_path not in sys.path:
+    sys.path.append(cause_path)
+
+from detectors.intent import extract_intent
+from detectors.severity import detect_severity
 # Suppress some noisy warnings from transformers if any
 warnings.filterwarnings("ignore")
 
@@ -11,19 +21,15 @@ print("Loading models... This may take a moment.")
 
 # Emotion
 try:
-    from emotion.service import EmotionService
+    from detectors.emotion.service import EmotionService
     emotion_service = EmotionService()
-except ImportError:
-    print("Warning: Could not import EmotionService. Make sure you run this script from the 'mental-health-chatbot' directory.")
+except ImportError as e:
+    print(f"Warning: Could not import EmotionService: {e}")
     emotion_service = None
 
 # Cause
-cause_bosch_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cause_bosch")
-if cause_bosch_path not in sys.path:
-    sys.path.append(cause_bosch_path)
-
 try:
-    from cause_bosch.extract import CauseEffectExtractor
+    from detectors.cause.extract import CauseEffectExtractor
     cause_extractor = CauseEffectExtractor(
         model_dir=".",
         base_model_name="roberta-large",
@@ -31,6 +37,7 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import CauseEffectExtractor: {e}")
     cause_extractor = None
+
 
 def analyze_query(query: str):
     print(f"\nAnalyzing query: '{query}'\n" + "-"*50)

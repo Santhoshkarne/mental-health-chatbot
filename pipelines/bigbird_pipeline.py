@@ -67,7 +67,8 @@ def main():
             break
 
         if not user_input:
-            continue
+            print("\nGoodbye! 👋")
+            break
 
         if user_input.lower() in ("quit", "exit", "q"):
             print("\nGoodbye! 👋")

@@ -53,31 +53,82 @@ export const useChatStore = create<ChatState>((set, get) => ({
       content: trimmed,
       createdAt: Date.now(),
     }
-    const assistantMsg: ChatMessage = {
-      id: makeId(),
+    
+    // Create a temporary assistant message to show it's thinking
+    const loadingMsgId = makeId()
+    const loadingMsg: ChatMessage = {
+      id: loadingMsgId,
       role: 'assistant',
-      content: "I'm MindMend, here to help. This is a demo reply so you can see how the conversation view looks.",
+      content: "Thinking...",
       createdAt: Date.now() + 1,
     }
 
-    if (activeChatId) {
+    let targetChatId = activeChatId
+
+    if (targetChatId) {
       set({
-        chats: chats.map((c) =>
-          c.id === activeChatId
-            ? { ...c, messages: [...c.messages, userMsg, assistantMsg], updatedAt: Date.now() }
+        chats: get().chats.map((c) =>
+          c.id === targetChatId
+            ? { ...c, messages: [...c.messages, userMsg, loadingMsg], updatedAt: Date.now() }
             : c,
         ),
       })
-      return { success: true }
+    } else {
+      const newChat: ChatSummary = {
+        id: makeId(),
+        title: trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed,
+        updatedAt: Date.now(),
+        messages: [userMsg, loadingMsg],
+      }
+      targetChatId = newChat.id
+      set({ chats: [newChat, ...get().chats], activeChatId: newChat.id })
     }
 
-    const newChat: ChatSummary = {
-      id: makeId(),
-      title: trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed,
-      updatedAt: Date.now(),
-      messages: [userMsg, assistantMsg],
-    }
-    set({ chats: [newChat, ...chats], activeChatId: newChat.id })
+    // Fire off the API request in the background
+    fetch('http://localhost:8000/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: trimmed }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('API Error')
+        return res.json()
+      })
+      .then((data) => {
+        // Find the chat and update the loading message with the real answer
+        set({
+          chats: get().chats.map((c) =>
+            c.id === targetChatId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === loadingMsgId ? { ...m, content: data.answer } : m
+                  ),
+                  updatedAt: Date.now(),
+                }
+              : c
+          ),
+        })
+      })
+      .catch((err) => {
+        // Handle error by updating the loading message
+        set({
+          chats: get().chats.map((c) =>
+            c.id === targetChatId
+              ? {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === loadingMsgId ? { ...m, content: "Sorry, I couldn't connect to the MindMend server." } : m
+                  ),
+                  updatedAt: Date.now(),
+                }
+              : c
+          ),
+        })
+      })
+
     return { success: true }
   },
 }))
