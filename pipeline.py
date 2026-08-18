@@ -1,8 +1,8 @@
 import warnings
 import os
 import sys
-from intent import extract_intent
-from severity import detect_severity
+from metrics.intent import extract_intent
+from metrics.severity import detect_severity
 # Suppress some noisy warnings from transformers if any
 warnings.filterwarnings("ignore")
 

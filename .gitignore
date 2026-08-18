@@ -31,4 +31,5 @@ Thumbs.db
 data/*.json
 data/*.pt
 model.pt
-keyphrase_dataset/books_dataset/graph.json
+keyphrase_dataset/
+books_dataset/graph.json

@@ -144,7 +144,7 @@ def run_dialog_analysis(query: str) -> dict:
 
     # ── 4. Severity Detection ──
     try:
-        from severity import detect_severity
+        from metrics.severity import detect_severity
         severity_label, severity_score = detect_severity(query)
         result["severity"] = severity_label
         result["severity_score"] = severity_score
