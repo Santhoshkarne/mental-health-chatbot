@@ -30,3 +30,5 @@ Thumbs.db
 # Generated Knowledge Graph and Embeddings (too large for GitHub)
 data/*.json
 data/*.pt
+model.pt
+keyphrase_dataset/books_dataset/graph.json
